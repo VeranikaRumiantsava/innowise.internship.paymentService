@@ -89,7 +89,7 @@ public class PaymentControllerIT extends BaseIT {
 
     private Consumer<String, String> createStringConsumer(String topic) {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.kafkaContainer.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + UUID.randomUUID());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -113,7 +113,7 @@ public class PaymentControllerIT extends BaseIT {
 
     private void clearKafkaTopic(String topic) {
         var adminProps = new Properties();
-        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.kafkaContainer.getBootstrapServers());
 
         try (var admin = AdminClient.create(adminProps)) {
             var partitions = admin.describeTopics(Collections.singletonList(topic))
@@ -149,7 +149,7 @@ public class PaymentControllerIT extends BaseIT {
 
         private Consumer<String, String> createTestConsumer() {
             Properties props = new Properties();
-            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.kafkaContainer.getBootstrapServers());
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + UUID.randomUUID());
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());

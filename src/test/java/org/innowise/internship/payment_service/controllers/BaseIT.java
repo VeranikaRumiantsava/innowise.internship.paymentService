@@ -45,12 +45,12 @@ public abstract class BaseIT {
 
     @Container
     @ServiceConnection(name = "mongo")
-    public static final MongoDBContainer MONGO = new MongoDBContainer("mongo:6.0.8");
+    public static final MongoDBContainer mongoContainer = new MongoDBContainer("mongo:6.0.8");
 
 
     @Container
     @ServiceConnection(name = "kafka")
-    public static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));
+    public static final KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));
 
     public static final WireMockServer  WIREMOCK = new WireMockServer(WireMockConfiguration.options().dynamicPort());
     static {
@@ -60,8 +60,8 @@ public abstract class BaseIT {
 
     @DynamicPropertySource
     static void registerDynamicProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.mongodb.uri", MONGO::getReplicaSetUrl);
-        registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+        registry.add("spring.data.mongodb.uri", mongoContainer::getReplicaSetUrl);
+        registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
         registry.add("test.wiremock.base-url", WIREMOCK::baseUrl);
     }
 }
