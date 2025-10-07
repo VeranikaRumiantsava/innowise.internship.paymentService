@@ -114,16 +114,10 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Run unit tests
-        run: mvn -B -V test \
-          -Dspring.data.mongodb.host=127.0.0.1 \
-          -Dspring.data.mongodb.port=27017 \
-          -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
+        run: mvn -B -V test -Dspring.data.mongodb.host=127.0.0.1 -Dspring.data.mongodb.port=27017 -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
 
       - name: Run integration tests (verify)
-        run: mvn -B -V verify \
-          -Dspring.data.mongodb.host=127.0.0.1 \
-          -Dspring.data.mongodb.port=27017 \
-          -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
+        run: mvn -B -V verify -Dspring.data.mongodb.host=127.0.0.1 -Dspring.data.mongodb.port=27017 -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
 
       - name: Show Kafka topics (debug)
         if: failure() || always()
