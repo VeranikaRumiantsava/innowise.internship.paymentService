@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,10 +44,12 @@ public abstract class BaseIT {
     protected PaymentKafkaProducer paymentKafkaProducer;
 
     @Container
+    @ServiceConnection(name = "mongo")
     public static final MongoDBContainer MONGO = new MongoDBContainer("mongo:6.0.8");
 
 
     @Container
+    @ServiceConnection(name = "kafka")
     public static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));
 
     public static final WireMockServer  WIREMOCK = new WireMockServer(WireMockConfiguration.options().dynamicPort());
