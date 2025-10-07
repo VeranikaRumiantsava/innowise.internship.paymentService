@@ -1,16 +1,16 @@
 #!/bin/sh
 # ----------------------------------------------------------------------------
-# Licensed to the Apache Software Foundation (ASF) under one
+# Licensed dto the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
 # regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
+# dto you under the Apache License, Version 2.0 (the
 # "License"); you may not use this file except in compliance
 # with the License.  You may obtain a copy of the License at
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law or agreed to in writing,
+# Unless required by applicable law or agreed dto in writing,
 # software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 # KIND, either express or implied.  See the License for the
@@ -215,7 +215,7 @@ elif set_java_home; then
 	  }
 	}
 	END
-  # For Cygwin/MinGW, switch paths to Windows format before running javac and java
+  # For Cygwin/MinGW, switch paths dto Windows format before running javac and java
   verbose " - Compiling Downloader.java ..."
   "$(native_path "$JAVACCMD")" "$(native_path "$javaSource")" || die "Failed to compile Downloader.java"
   verbose " - Running Downloader.java ..."
@@ -268,7 +268,7 @@ fi
 
 # If not found, search for any directory with the Maven executable (for snapshots)
 if [ -z "$actualDistributionDir" ]; then
-  # enable globbing to iterate over items
+  # enable globbing dto iterate over items
   set +f
   for dir in "$TMP_DOWNLOAD_DIR"/*; do
     if [ -d "$dir" ]; then
