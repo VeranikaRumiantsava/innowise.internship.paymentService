@@ -36,69 +36,12 @@ jobs:
     needs: build
 
     env:
-      SPRING_DATA_MONGODB_HOST: 127.0.0.1
-      SPRING_DATA_MONGODB_PORT: 27017
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
-      RANDOM_CLIENT_URL: http://127.0.0.1:8081
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+      DOCKER_HOST: unix:///var/run/docker.sock
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Docker & Runner diagnostics
-        run: |
-          echo "Runner architecture: $(uname -m)"
-          docker version || true
-          docker info || true
-          # Try to pull the Confluent images for amd64 explicitly to reveal platform issues early
-          docker pull --platform linux/amd64 confluentinc/cp-zookeeper:7.4.0 || true
-          docker pull --platform linux/amd64 confluentinc/cp-kafka:7.4.0 || true
-
-      - name: Start Zookeeper (amd64)
-        run: |
-          docker run -d --name zookeeper --platform linux/amd64 \
-            -e ZOOKEEPER_CLIENT_PORT=2181 -e ZOOKEEPER_TICK_TIME=2000 \
-            -p 2181:2181 \
-            confluentinc/cp-zookeeper:7.4.0
-          echo "Zookeeper container started."
-
-      - name: Start Confluent Kafka (amd64)
-        run: |
-          docker run -d --name kafka --platform linux/amd64 --link zookeeper \
-            -e KAFKA_BROKER_ID=1 \
-            -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
-            -e KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092 \
-            -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
-            -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-            -p 9092:9092 \
-            confluentinc/cp-kafka:7.4.0
-          echo "Kafka container started."
-
-      - name: Wait for MongoDB & Kafka to be ready
-        run: |
-          echo "Waiting for MongoDB (container from services) and Kafka to be reachable..."
-          # Wait for Mongo (service started by GitHub job? we will check port anyway)
-          for i in $(seq 1 60); do
-            nc -z 127.0.0.1 27017 && echo "Mongo port open" && break
-            echo "Waiting for Mongo ($i/60)..."
-            sleep 1
-          done
-          
-
-          # Wait for Kafka broker API to respond
-          for i in $(seq 1 60); do
-            echo "Checking Kafka readiness ($i/60)..."
-            # Try kafka-broker-api-versions inside the container
-            if docker exec kafka bash -c "kafka-broker-api-versions --bootstrap-server 127.0.0.1:9092" >/dev/null 2>&1; then
-              echo "Kafka is ready"
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "Kafka did not start in time. Dumping logs:" >&2
-          docker logs kafka || true
-          exit 1
 
       - name: Setup Java 21
         uses: actions/setup-java@v3
@@ -114,18 +57,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Run unit tests
-        run: mvn -B -V test -Dspring.data.mongodb.host=127.0.0.1 -Dspring.data.mongodb.port=27017 -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
+      - name: Run all tests with Testcontainers
+        run: |
+          echo "Running unit and integration tests using Testcontainers..."
+          mvn -B -V verify
 
-      - name: Run integration tests (verify)
-        run: mvn -B -V verify -Dspring.data.mongodb.host=127.0.0.1 -Dspring.data.mongodb.port=27017 -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
-
-      - name: Show Kafka topics (debug)
+      - name: Show logs on failure
         if: failure() || always()
         run: |
-          echo "Topics list (if kafka alive):"
-          docker exec kafka bash -c "kafka-topics --bootstrap-server 127.0.0.1:9092 --list" || true
-          docker logs kafka || true
+          echo "Testcontainers logs (if any failures):"
+          # Testcontainers сами логируют контейнеры, можно добавить дополнительные debug info
+          docker ps -a || true
+          docker logs $(docker ps -aq) || true
 
   docker-build:
     runs-on: ubuntu-latest
