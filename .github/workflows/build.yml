@@ -83,6 +83,7 @@ jobs:
             echo "Waiting for Mongo ($i/60)..."
             sleep 1
           done
+          
 
           # Wait for Kafka broker API to respond
           for i in $(seq 1 60); do
