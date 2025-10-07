@@ -1,9 +1,12 @@
 package org.innowise.internship.payment_service.services;
 
 import org.innowise.internship.payment_service.clients.RandomNumberClient;
-import org.innowise.internship.payment_service.dto.*;
+import org.innowise.internship.payment_service.dto.CreatePaymentDTO;
+import org.innowise.internship.payment_service.dto.ResponsePaymentDTO;
+import org.innowise.internship.payment_service.dto.UpdatePaymentDTO;
 import org.innowise.internship.payment_service.entities.Payment;
 import org.innowise.internship.payment_service.entities.PaymentStatus;
+import org.innowise.internship.payment_service.exceptions.PaymentDoesNotExistsException;
 import org.innowise.internship.payment_service.kafka.producers.PaymentKafkaProducer;
 import org.innowise.internship.payment_service.mappers.PaymentMapper;
 import org.innowise.internship.payment_service.repositories.PaymentRepository;
@@ -14,7 +17,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -40,7 +42,7 @@ class PaymentServiceTest {
     private PaymentService paymentService;
 
     @Test
-    void createPaymentShouldReturnResponsePaymentDTO() {
+    void createPaymentShouldReturnResponsePaymentDTO_whenRandomEven() {
         CreatePaymentDTO createDTO = new CreatePaymentDTO();
         createDTO.setOrderId(1L);
         createDTO.setUserId(1L);
@@ -57,7 +59,7 @@ class PaymentServiceTest {
         responseDTO.setId("1");
 
         Mockito.when(paymentMapper.createPaymentDTOTOPayment(createDTO)).thenReturn(payment);
-        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("2");
+        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("2"); // even -> SUCCESS
         Mockito.when(paymentRepository.save(payment)).thenReturn(savedPayment);
         Mockito.when(paymentMapper.PaymentToResponseDTO(savedPayment)).thenReturn(responseDTO);
 
@@ -68,7 +70,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void createPaymentShouldSetFailedWhenRandomIsNotNumber() {
+    void createPaymentShouldSetFailedWhenRandomIsOdd() {
         CreatePaymentDTO createDTO = new CreatePaymentDTO();
         createDTO.setOrderId(1L);
         createDTO.setUserId(1L);
@@ -79,8 +81,9 @@ class PaymentServiceTest {
         responseDTO.setId("1");
 
         Mockito.when(paymentMapper.createPaymentDTOTOPayment(createDTO)).thenReturn(payment);
-        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn(String.valueOf(3));
+        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("3"); // odd -> FAILED
         Mockito.when(paymentRepository.save(payment)).then(invocation -> {
+            // status должен быть выставлен перед сохранением
             Assertions.assertEquals(PaymentStatus.FAILED, payment.getStatus());
             return payment;
         });
@@ -93,7 +96,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void createPaymentShouldSetSuccessWhenRandomIsNotNumber() {
+    void createPaymentShouldHandleNonNumericRandomAndSetFailed() {
         CreatePaymentDTO createDTO = new CreatePaymentDTO();
         createDTO.setOrderId(1L);
         createDTO.setUserId(1L);
@@ -104,9 +107,9 @@ class PaymentServiceTest {
         responseDTO.setId("1");
 
         Mockito.when(paymentMapper.createPaymentDTOTOPayment(createDTO)).thenReturn(payment);
-        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn(String.valueOf(2));
+        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("not-a-number"); // parse -> NumberFormatException -> returns 1 -> odd -> FAILED
         Mockito.when(paymentRepository.save(payment)).then(invocation -> {
-            Assertions.assertEquals(PaymentStatus.SUCCESS, payment.getStatus());
+            Assertions.assertEquals(PaymentStatus.FAILED, payment.getStatus());
             return payment;
         });
         Mockito.when(paymentMapper.PaymentToResponseDTO(payment)).thenReturn(responseDTO);
@@ -150,7 +153,7 @@ class PaymentServiceTest {
         String id = "nonexistent";
         Mockito.when(paymentRepository.findById(id)).thenReturn(Optional.empty());
 
-        Assertions.assertThrows(ResponseStatusException.class,
+        Assertions.assertThrows(PaymentDoesNotExistsException.class,
                 () -> paymentService.updatePayment(id, new UpdatePaymentDTO()));
     }
 
@@ -173,7 +176,7 @@ class PaymentServiceTest {
     void getPaymentByIdShouldThrowWhenPaymentNotFound() {
         Mockito.when(paymentRepository.findById("1")).thenReturn(Optional.empty());
 
-        Assertions.assertThrows(ResponseStatusException.class,
+        Assertions.assertThrows(PaymentDoesNotExistsException.class,
                 () -> paymentService.getPaymentById("1"));
     }
 
@@ -202,6 +205,32 @@ class PaymentServiceTest {
         Assertions.assertTrue(result.isEmpty());
     }
 
+    // --- НОВЫЕ ТЕСТЫ: getPaymentsByUserId ---
+    @Test
+    void getPaymentsByUserIdShouldReturnList() {
+        Long userId = 42L;
+        Payment payment = new Payment();
+        payment.setUserId(userId);
+        ResponsePaymentDTO dto = new ResponsePaymentDTO();
+        dto.setId("u-1");
+
+        Mockito.when(paymentRepository.findByUserId(userId)).thenReturn(List.of(payment));
+        Mockito.when(paymentMapper.PaymentToResponseDTO(payment)).thenReturn(dto);
+
+        List<ResponsePaymentDTO> result = paymentService.getPaymentsByUserId(userId);
+        Assertions.assertEquals(1, result.size());
+        Assertions.assertEquals(dto, result.get(0));
+    }
+
+    @Test
+    void getPaymentsByUserIdShouldReturnEmptyListWhenNoPayments() {
+        Long userId = 42L;
+        Mockito.when(paymentRepository.findByUserId(userId)).thenReturn(List.of());
+
+        List<ResponsePaymentDTO> result = paymentService.getPaymentsByUserId(userId);
+        Assertions.assertTrue(result.isEmpty());
+    }
+    // --- конец новых тестов ---
 
     @Test
     void getPaymentsByStatusesShouldReturnList() {
@@ -252,5 +281,14 @@ class PaymentServiceTest {
 
         BigDecimal total = paymentService.getTotalPaymentsSum(start, end);
         Assertions.assertEquals(BigDecimal.ZERO, total);
+    }
+
+    @Test
+    void getTotalPaymentsSumShouldThrowWhenEndBeforeStart() {
+        LocalDateTime start = LocalDateTime.now();
+        LocalDateTime end = LocalDateTime.now().minusDays(1);
+
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> paymentService.getTotalPaymentsSum(start, end));
     }
 }

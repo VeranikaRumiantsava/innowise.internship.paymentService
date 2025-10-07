@@ -16,7 +16,6 @@ public class PaymentKafkaConsumer {
 
     @KafkaListener(topics = "CREATE_ORDER_TOPIC", groupId = "payment-group")
     public void handleCreateOrder(OrderDTO orderDTO) {
-        System.out.println("Received CREATE_ORDER event: " + orderDTO);
 
         CreatePaymentDTO createPaymentDTO = new CreatePaymentDTO();
         createPaymentDTO.setOrderId(orderDTO.getOrderId());

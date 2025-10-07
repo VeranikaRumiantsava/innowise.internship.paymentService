@@ -103,6 +103,14 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/com.epages/wiremock-spring-boot-starter -->
+		<dependency>
+			<groupId>com.epages</groupId>
+			<artifactId>wiremock-spring-boot-starter</artifactId>
+			<version>1.0.0</version>
+			<type>pom</type>
+		</dependency>
 	</dependencies>
 
 	<dependencyManagement>
