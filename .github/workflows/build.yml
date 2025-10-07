@@ -36,7 +36,6 @@ jobs:
     needs: build
 
     services:
-      # MongoDB for payment-service
       mongodb:
         image: mongo:7.0
         ports:
@@ -47,7 +46,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      # Zookeeper required by the Confluent Kafka image
       zookeeper:
         image: confluentinc/cp-zookeeper:7.4.0
         ports:
@@ -58,7 +56,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      # Kafka broker
       kafka:
         image: confluentinc/cp-kafka:7.4.0
         ports:
@@ -67,7 +64,6 @@ jobs:
           KAFKA_BROKER_ID: 1
           KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
           KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-          # Important: advertise localhost so tests running on the runner can reach broker
           KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
           KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
         options: >-
@@ -76,22 +72,21 @@ jobs:
           --health-timeout 5s
           --health-retries 10
           --start-period 20s
-        depends_on:
-          - zookeeper
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Wait for services to be ready
-        # quick loop to wait a bit; GH service healthchecks also run but this helps flakiness
         run: |
           echo "Waiting for Mongo and Kafka to come up..."
-          for i in {1..30}; do
-            nc -z 127.0.0.1 27017 && nc -z 127.0.0.1 9092 && echo "services up" && break
+          for i in {1..60}; do
+            nc -z 127.0.0.1 27017 && nc -z 127.0.0.1 9092 && echo "services up" && exit 0
             echo "waiting... ($i)"
             sleep 2
           done
+          echo "services did not start in time" >&2
+          exit 1
 
       - name: Setup Java 21
         uses: actions/setup-java@v3
@@ -109,12 +104,11 @@ jobs:
 
       - name: Run unit tests
         env:
-          # application properties overrides for tests (runner -> services mapped to localhost)
           SPRING_DATA_MONGODB_HOST: 127.0.0.1
           SPRING_DATA_MONGODB_PORT: 27017
           SPRING_KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
           RANDOM_CLIENT_URL: http://127.0.0.1:8081
-        run: mvn -B -V test -DskipITs=false \
+        run: mvn -B -V test \
           -Dspring.data.mongodb.host=127.0.0.1 \
           -Dspring.data.mongodb.port=27017 \
           -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
@@ -125,7 +119,7 @@ jobs:
           SPRING_DATA_MONGODB_PORT: 27017
           SPRING_KAFKA_BOOTSTRAP_SERVERS: 127.0.0.1:9092
           RANDOM_CLIENT_URL: http://127.0.0.1:8081
-        run: mvn -B -V verify -DskipTests=false \
+        run: mvn -B -V verify \
           -Dspring.data.mongodb.host=127.0.0.1 \
           -Dspring.data.mongodb.port=27017 \
           -Dspring.kafka.bootstrap-servers=127.0.0.1:9092
@@ -150,4 +144,3 @@ jobs:
           context: .
           push: true
           tags: verdeth/paymentservice:latest
-
