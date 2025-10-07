@@ -1,8 +1,11 @@
 package org.innowise.internship.payment_service.controllers;
 
+import com.github.tomakehurst.wiremock.client.WireMock;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.innowise.internship.payment_service.clients.RandomNumberClient;
@@ -14,13 +17,11 @@ import org.innowise.internship.payment_service.repositories.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -28,27 +29,40 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Properties;
 import java.util.UUID;
-
-import com.github.tomakehurst.wiremock.client.WireMock;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.apache.kafka.common.TopicPartition;
 
 @SpringBootTest
 @Testcontainers
 @AutoConfigureMockMvc
 public class PaymentControllerIT extends BaseIT {
 
+    @MockBean
+    private RandomNumberClient randomNumberClient;
+
     @Autowired
     private PaymentRepository repo;
+
+    @BeforeEach
+    void setUp() {
+        repo.deleteAll();
+        BaseIT.WIREMOCK.resetAll();
+
+        Mockito.when(randomNumberClient.getRandomNumber())
+                .thenAnswer(invocation -> {
+                    String url = BaseIT.WIREMOCK.baseUrl() + "/integers/?num=1&min=1&max=100&col=1&base=10&format=plain";
+                    return new org.springframework.web.client.RestTemplate().getForObject(url, String.class);
+                });
+    }
 
     private CreatePaymentDTO createDto(Long orderId, Long userId, BigDecimal amount) {
         CreatePaymentDTO dto = new CreatePaymentDTO();
@@ -66,7 +80,6 @@ public class PaymentControllerIT extends BaseIT {
         return dto;
     }
 
-    // Позволяет легко добавлять заголовок X-User-Id (если понадобится в будущем)
     private RequestPostProcessor withUserId(Long userId) {
         return request -> {
             request.addHeader("X-User-Id", String.valueOf(userId));
@@ -74,32 +87,83 @@ public class PaymentControllerIT extends BaseIT {
         };
     }
 
-    @BeforeEach
-    void setUp() {
-        repo.deleteAll();
-        // reset WireMock mappings before each test
-        BaseIT.WIREMOCK.resetAll();
+    private Consumer<String, String> createStringConsumer(String topic) {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + UUID.randomUUID());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        Consumer<String, String> consumer = new KafkaConsumer<>(props);
+        consumer.subscribe(Collections.singletonList(topic));
+        return consumer;
     }
 
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        @Primary
-        public RandomNumberClient randomNumberClient() {
-            return () -> {
-                // call WireMock directly so Feign is not required in test context
-                String url = BaseIT.WIREMOCK.baseUrl() + "/integers/?num=1&min=1&max=100&col=1&base=10&format=plain";
-                return new org.springframework.web.client.RestTemplate().getForObject(url, String.class);
-            };
+//    private void clearKafkaTopic(String topic) {
+//        var producerProps = new Properties();
+//        producerProps.put("bootstrap.servers", BaseIT.KAFKA.getBootstrapServers());
+//        producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+//        producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+//        try (var producer = new org.apache.kafka.clients.producer.KafkaProducer<String, String>(producerProps)) {
+//            producer.send(new org.apache.kafka.clients.producer.ProducerRecord<>(topic, null, null));
+//            producer.flush();
+//        }
+//    }
+
+    private void clearKafkaTopic(String topic) {
+        var adminProps = new Properties();
+        adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
+
+        try (var admin = AdminClient.create(adminProps)) {
+            var partitions = admin.describeTopics(Collections.singletonList(topic))
+                    .all()
+                    .get()
+                    .get(topic)
+                    .partitions();
+
+            var endOffsets = admin.listOffsets(
+                    partitions.stream()
+                            .map(p -> new TopicPartition(topic, p.partition()))
+                            .collect(Collectors.toMap(tp -> tp, tp -> org.apache.kafka.clients.admin.OffsetSpec.latest()))
+            ).all().get();
+
+            var recordsToDelete = new HashMap<TopicPartition, RecordsToDelete>();
+            for (var partitionInfo : partitions) {
+                var tp = new TopicPartition(topic, partitionInfo.partition());
+                long offset = endOffsets.get(tp).offset();
+                recordsToDelete.put(tp, RecordsToDelete.beforeOffset(offset));
+            }
+
+            admin.deleteRecords(recordsToDelete).all().get();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to clear Kafka topic: " + topic, e);
         }
     }
+
 
     @Nested
     class CreatePaymentTests {
 
+        private final String topic = "CREATE_PAYMENT_TOPIC";
+
+        private Consumer<String, String> createTestConsumer() {
+            Properties props = new Properties();
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + UUID.randomUUID());
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+            Consumer<String, String> consumer = new KafkaConsumer<>(props);
+            consumer.subscribe(Collections.singletonList(topic));
+            return consumer;
+        }
+
         @Test
         void createPaymentShouldReturn201AndPersistAndSendKafka_whenExternalReturnsEven() throws Exception {
-            // stub WireMock -> even number
+            clearKafkaTopic(topic);
+
             BaseIT.WIREMOCK.stubFor(
                     WireMock.get(WireMock.urlPathEqualTo("/integers/"))
                             .withQueryParam("num", WireMock.equalTo("1"))
@@ -113,7 +177,6 @@ public class PaymentControllerIT extends BaseIT {
 
             CreatePaymentDTO dto = createDto(100L, 200L, new BigDecimal("123.45"));
 
-            // perform request
             mockMvc.perform(post("/api/payments")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(dto)))
@@ -122,29 +185,40 @@ public class PaymentControllerIT extends BaseIT {
                     .andExpect(jsonPath("$.userId").value(200))
                     .andExpect(jsonPath("$.status").value("SUCCESS"));
 
-            // assert DB
             var list = repo.findByOrderId(100L);
             assertThat(list).hasSize(1);
             Payment saved = list.get(0);
             assertThat(saved.getPaymentAmount()).isEqualByComparingTo(new BigDecimal("123.45"));
             assertThat(saved.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
 
-            // assert kafka message produced (poll testcontainer kafka)
-            Consumer<String, String> consumer = createStringConsumer();
-            consumer.subscribe(Collections.singletonList("CREATE_PAYMENT_TOPIC"));
-            ConsumerRecords<String, String> recs = consumer.poll(java.time.Duration.ofSeconds(10));
-            consumer.close();
-            assertThat(recs.isEmpty()).isFalse();
-            String msg = recs.iterator().next().value();
-            assertThat(msg).contains("\"orderId\":100");
-            assertThat(msg).contains("\"status\":\"SUCCESS\"");
+            Consumer<String, String> consumer = createTestConsumer();
+            boolean messageReceived = false;
+
+            long timeout = System.currentTimeMillis() + 5000;
+
+            while (!messageReceived && System.currentTimeMillis() < timeout) {
+                var recs = consumer.poll(java.time.Duration.ofMillis(200));
+                for (var record : recs) {
+                    String msg = record.value();
+                    if (msg != null) {
+                        assertThat(msg).contains("\"orderId\":100");
+                        assertThat(msg).contains("\"status\":\"SUCCESS\"");
+                        messageReceived = true;
+                        break;
+                    }
+                }
+            }
+
+            assertThat(messageReceived).isTrue();
         }
 
         @Test
-        void createPaymentShouldMarkFailed_whenExternalReturnsNonNumeric() throws Exception {
+        void createPaymentShouldMarkFailedWhenExternalReturnsNonNumeric() throws Exception {
+            clearKafkaTopic(topic);
+
             BaseIT.WIREMOCK.stubFor(
                     WireMock.get(WireMock.urlPathEqualTo("/integers/"))
-                            .willReturn(WireMock.aResponse().withStatus(200).withBody("not-a-number"))
+                            .willReturn(WireMock.aResponse().withStatus(200).withBody("31"))
             );
 
             CreatePaymentDTO dto = createDto(101L, 201L, new BigDecimal("10"));
@@ -157,6 +231,25 @@ public class PaymentControllerIT extends BaseIT {
 
             Payment saved = repo.findByOrderId(101L).get(0);
             assertThat(saved.getStatus()).isEqualTo(PaymentStatus.FAILED);
+
+            Consumer<String, String> consumer = createTestConsumer();
+            boolean messageReceived = false;
+
+            long timeout = System.currentTimeMillis() + 5000;
+            while (!messageReceived && System.currentTimeMillis() < timeout) {
+                var recs = consumer.poll(java.time.Duration.ofMillis(200));
+                for (var record : recs) {
+                    String msg = record.value();
+                    if (msg != null) {
+                        assertThat(msg).contains("\"orderId\":101");
+                        assertThat(msg).contains("\"status\":\"FAILED\"");
+                        messageReceived = true;
+                    }
+                }
+            }
+            consumer.close();
+
+            assertThat(messageReceived).isTrue();
         }
     }
 
@@ -224,17 +317,5 @@ public class PaymentControllerIT extends BaseIT {
             Payment fromDb = repo.findById(saved.getId()).orElseThrow();
             assertThat(fromDb.getPaymentAmount()).isEqualByComparingTo(new BigDecimal("20"));
         }
-    }
-
-    // ----------------- helpers -----------------
-    private Consumer<String, String> createStringConsumer() {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.KAFKA.getBootstrapServers());
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + UUID.randomUUID());
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        return new KafkaConsumer<>(props);
     }
 }

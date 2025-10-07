@@ -1,14 +1,12 @@
 package org.innowise.internship.payment_service.controllers;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import org.innowise.internship.payment_service.clients.RandomNumberClient;
 import org.innowise.internship.payment_service.kafka.producers.PaymentKafkaProducer;
 import org.innowise.internship.payment_service.mappers.PaymentMapper;
 import org.innowise.internship.payment_service.repositories.PaymentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -42,9 +40,7 @@ public abstract class BaseIT {
     protected PaymentMapper paymentMapper;
 
     @Autowired
-    @SpyBean
     protected PaymentKafkaProducer paymentKafkaProducer;
-
 
     @Container
     public static final MongoDBContainer MONGO = new MongoDBContainer("mongo:6.0.8");
@@ -53,8 +49,6 @@ public abstract class BaseIT {
     @Container
     public static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));
 
-
-    // WireMock server available to all integration tests
     public static final WireMockServer  WIREMOCK = new WireMockServer(WireMockConfiguration.options().dynamicPort());
     static {
         WIREMOCK.start();
