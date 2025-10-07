@@ -144,3 +144,4 @@ jobs:
           context: .
           push: true
           tags: verdeth/paymentservice:latest
+
