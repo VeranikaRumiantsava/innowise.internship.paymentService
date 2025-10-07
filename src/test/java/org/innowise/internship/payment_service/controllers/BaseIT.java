@@ -49,7 +49,7 @@ public abstract class BaseIT {
 
 
     @Container
-    @ServiceConnection(name = "kafka")
+    @ServiceConnection(name = "kafkaContainer")
     public static final KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));
 
     public static final WireMockServer  WIREMOCK = new WireMockServer(WireMockConfiguration.options().dynamicPort());
