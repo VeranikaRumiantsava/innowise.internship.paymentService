@@ -44,11 +44,11 @@ public abstract class BaseIT {
     protected PaymentKafkaProducer paymentKafkaProducer;
 
     @Container
-    @ServiceConnection(name = "mongo")
+    //@ServiceConnection(name = "mongo")
     public static final MongoDBContainer mongoContainer = new MongoDBContainer("mongo:6.0.8");
 
     @Container
-    @ServiceConnection(name = "kafka")
+    //@ServiceConnection(name = "kafka")
     public static final KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));
 
     public static final WireMockServer  WIREMOCK = new WireMockServer(WireMockConfiguration.options().dynamicPort());
