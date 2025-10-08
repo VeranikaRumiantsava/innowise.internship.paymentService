@@ -59,7 +59,7 @@ class PaymentServiceTest {
         responseDTO.setId("1");
 
         Mockito.when(paymentMapper.createPaymentDTOTOPayment(createDTO)).thenReturn(payment);
-        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("2"); // even -> SUCCESS
+        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("2");
         Mockito.when(paymentRepository.save(payment)).thenReturn(savedPayment);
         Mockito.when(paymentMapper.PaymentToResponseDTO(savedPayment)).thenReturn(responseDTO);
 
@@ -81,9 +81,8 @@ class PaymentServiceTest {
         responseDTO.setId("1");
 
         Mockito.when(paymentMapper.createPaymentDTOTOPayment(createDTO)).thenReturn(payment);
-        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("3"); // odd -> FAILED
+        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("3");
         Mockito.when(paymentRepository.save(payment)).then(invocation -> {
-            // status должен быть выставлен перед сохранением
             Assertions.assertEquals(PaymentStatus.FAILED, payment.getStatus());
             return payment;
         });
@@ -107,7 +106,7 @@ class PaymentServiceTest {
         responseDTO.setId("1");
 
         Mockito.when(paymentMapper.createPaymentDTOTOPayment(createDTO)).thenReturn(payment);
-        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("not-a-number"); // parse -> NumberFormatException -> returns 1 -> odd -> FAILED
+        Mockito.when(randomNumberClient.getRandomNumber()).thenReturn("not-a-number");
         Mockito.when(paymentRepository.save(payment)).then(invocation -> {
             Assertions.assertEquals(PaymentStatus.FAILED, payment.getStatus());
             return payment;
@@ -205,7 +204,6 @@ class PaymentServiceTest {
         Assertions.assertTrue(result.isEmpty());
     }
 
-    // --- НОВЫЕ ТЕСТЫ: getPaymentsByUserId ---
     @Test
     void getPaymentsByUserIdShouldReturnList() {
         Long userId = 42L;
@@ -230,7 +228,6 @@ class PaymentServiceTest {
         List<ResponsePaymentDTO> result = paymentService.getPaymentsByUserId(userId);
         Assertions.assertTrue(result.isEmpty());
     }
-    // --- конец новых тестов ---
 
     @Test
     void getPaymentsByStatusesShouldReturnList() {

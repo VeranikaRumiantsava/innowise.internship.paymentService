@@ -47,7 +47,6 @@ public abstract class BaseIT {
     @ServiceConnection(name = "mongo")
     public static final MongoDBContainer mongoContainer = new MongoDBContainer("mongo:6.0.8");
 
-
     @Container
     @ServiceConnection(name = "kafkaContainer")
     public static final KafkaContainer kafkaContainer = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.7.5"));

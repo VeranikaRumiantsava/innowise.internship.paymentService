@@ -100,17 +100,6 @@ public class PaymentControllerIT extends BaseIT {
         return consumer;
     }
 
-//    private void clearKafkaTopic(String topic) {
-//        var producerProps = new Properties();
-//        producerProps.put("bootstrap.servers", BaseIT.KAFKA.getBootstrapServers());
-//        producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-//        producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-//        try (var producer = new org.apache.kafka.clients.producer.KafkaProducer<String, String>(producerProps)) {
-//            producer.send(new org.apache.kafka.clients.producer.ProducerRecord<>(topic, null, null));
-//            producer.flush();
-//        }
-//    }
-
     private void clearKafkaTopic(String topic) {
         var adminProps = new Properties();
         adminProps.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BaseIT.kafkaContainer.getBootstrapServers());
