@@ -30,7 +30,7 @@ jobs:
       - name: Build (skip tests)
         run: mvn -B -V -DskipTests package
 
-      - name: Upload built artifact (optional)
+      - name: Upload built artifact
         uses: actions/upload-artifact@v4
         with:
           name: built-jar
@@ -39,6 +39,10 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
+    services:
+      docker:
+        image: docker:24.0.5
+        options: --privileged
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,7 +53,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Restore Maven cache
+      - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
@@ -57,25 +61,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Docker info (verify Docker available for Testcontainers)
+      - name: Docker info (verify Docker available)
         run: docker version && docker info
 
-      - name: Force-resolve test dependencies (ensure test-scope jars present)
+      - name: Force-resolve test dependencies
         run: mvn -U -B -DskipTests dependency:resolve
 
-      - name: Show test-scope dependency tree
-        run: mvn -q -DskipTests dependency:tree -Dscope=test
-
-      - name: List spring-boot-testcontainers jar in local repo
-        run: ls -la ~/.m2/repository/org/springframework/boot/spring-boot-testcontainers || true
-
-      - name: Compile tests (populate test classpath)
+      - name: Compile tests
         run: mvn -DskipTests test-compile
 
-      - name: Run unit tests
+      - name: Run integration tests
         run: mvn -B -V test
 
-      - name: Archive test reports (always)
+      - name: Archive test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
