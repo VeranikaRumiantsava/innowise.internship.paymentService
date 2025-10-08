@@ -31,9 +31,44 @@ jobs:
       - name: Build (skip tests)
         run: mvn -B -V -DskipTests package
 
-  docker-build:
-    runs-on: ubuntu-latest
+  test:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Run unit tests
+        run: |
+          # запускаем unit-тесты (существующие surefire-плагины)
+          mvn -B -V test
+
+      - name: Archive test reports (always)
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/**
+            target/failsafe-reports/**
+
+  docker-build:
+    needs: test
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
