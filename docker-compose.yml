@@ -1,5 +1,4 @@
 services:
-  # ---------- PAYMENT SERVICE ----------
   paymentservice:
     build:
       context: .
@@ -24,7 +23,6 @@ services:
     networks:
       - app_network
 
-  # ---------- MONGODB ----------
   mongodb_paymentservice:
     image: mongo:7.0
     container_name: payment-mongo
@@ -45,7 +43,6 @@ services:
     networks:
       - app_network
 
-  # ---------- ZOOKEEPER ----------
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
@@ -58,7 +55,6 @@ services:
     networks:
       - app_network
 
-  # ---------- KAFKA ----------
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
