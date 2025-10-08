@@ -9,7 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,10 +30,15 @@ jobs:
       - name: Build (skip tests)
         run: mvn -B -V -DskipTests package
 
+      - name: Upload built artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-jar
+          path: target/*.jar
+
   test:
     needs: build
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,13 +49,28 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Cache Maven dependencies
+      - name: Restore Maven cache
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
+
+      - name: Docker info (verify Docker available for Testcontainers)
+        run: docker version && docker info
+
+      - name: Force-resolve test dependencies (ensure test-scope jars present)
+        run: mvn -U -B -DskipTests dependency:resolve
+
+      - name: Show test-scope dependency tree
+        run: mvn -q -DskipTests dependency:tree -Dscope=test
+
+      - name: List spring-boot-testcontainers jar in local repo
+        run: ls -la ~/.m2/repository/org/springframework/boot/spring-boot-testcontainers || true
+
+      - name: Compile tests (populate test classpath)
+        run: mvn -DskipTests test-compile
 
       - name: Run unit tests
         run: mvn -B -V test
@@ -68,7 +87,6 @@ jobs:
   docker-build:
     needs: test
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
