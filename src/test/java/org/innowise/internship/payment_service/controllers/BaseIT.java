@@ -59,8 +59,8 @@ public abstract class BaseIT {
 
     @DynamicPropertySource
     static void registerDynamicProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.mongodb.uri", mongoContainer::getReplicaSetUrl);
-        registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
+        registry.add("MONGO_URI", mongoContainer::getReplicaSetUrl);
+        registry.add("KAFKA_BOOTSTRAP_SERVERS", kafkaContainer::getBootstrapServers);
         registry.add("test.wiremock.base-url", WIREMOCK::baseUrl);
     }
 }
