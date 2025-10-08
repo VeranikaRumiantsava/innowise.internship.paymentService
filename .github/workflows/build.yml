@@ -71,7 +71,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-          --start-period 20s
+          # --start-period убран, т.к. GitHub Actions не поддерживает
 
     steps:
       - name: Checkout code
