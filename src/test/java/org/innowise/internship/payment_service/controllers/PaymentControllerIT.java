@@ -7,6 +7,7 @@ import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.innowise.internship.payment_service.clients.RandomNumberClient;
 import org.innowise.internship.payment_service.dto.CreatePaymentDTO;
@@ -28,18 +29,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Properties;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-import org.apache.kafka.common.TopicPartition;
 
 @SpringBootTest
 @Testcontainers
@@ -50,11 +46,11 @@ public class PaymentControllerIT extends BaseIT {
     private RandomNumberClient randomNumberClient;
 
     @Autowired
-    private PaymentRepository repo;
+    private PaymentRepository paymentRepository;
 
     @BeforeEach
     void setUp() {
-        repo.deleteAll();
+        paymentRepository.deleteAll();
         BaseIT.WIREMOCK.resetAll();
 
         Mockito.when(randomNumberClient.getRandomNumber())
@@ -64,20 +60,20 @@ public class PaymentControllerIT extends BaseIT {
                 });
     }
 
-    private CreatePaymentDTO createDto(Long orderId, Long userId, BigDecimal amount) {
-        CreatePaymentDTO dto = new CreatePaymentDTO();
-        dto.setOrderId(orderId);
-        dto.setUserId(userId);
-        dto.setPaymentAmount(amount);
-        dto.setStatus(PaymentStatus.PENDING);
-        return dto;
+    private CreatePaymentDTO createPaymentRequest(Long orderId, Long userId, BigDecimal amount) {
+        CreatePaymentDTO createPaymentDTO = new CreatePaymentDTO();
+        createPaymentDTO.setOrderId(orderId);
+        createPaymentDTO.setUserId(userId);
+        createPaymentDTO.setPaymentAmount(amount);
+        createPaymentDTO.setStatus(PaymentStatus.PENDING);
+        return createPaymentDTO;
     }
 
-    private UpdatePaymentDTO updateDto(PaymentStatus status, BigDecimal amount) {
-        UpdatePaymentDTO dto = new UpdatePaymentDTO();
-        dto.setStatus(status);
-        dto.setPaymentAmount(amount);
-        return dto;
+    private UpdatePaymentDTO createUpdateRequest(PaymentStatus status, BigDecimal amount) {
+        UpdatePaymentDTO updatePaymentDTO = new UpdatePaymentDTO();
+        updatePaymentDTO.setStatus(status);
+        updatePaymentDTO.setPaymentAmount(amount);
+        return updatePaymentDTO;
     }
 
     private RequestPostProcessor withUserId(Long userId) {
@@ -130,7 +126,6 @@ public class PaymentControllerIT extends BaseIT {
         }
     }
 
-
     @Nested
     class CreatePaymentTests {
 
@@ -164,17 +159,18 @@ public class PaymentControllerIT extends BaseIT {
                             .willReturn(WireMock.aResponse().withStatus(200).withBody("24"))
             );
 
-            CreatePaymentDTO dto = createDto(100L, 200L, new BigDecimal("123.45"));
+            CreatePaymentDTO createPaymentDTO = createPaymentRequest(100L, 200L, new BigDecimal("123.45"));
 
             mockMvc.perform(post("/api/payments")
+                            .with(withUserId(createPaymentDTO.getUserId()))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(dto)))
+                            .content(objectMapper.writeValueAsString(createPaymentDTO)))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.orderId").value(100))
                     .andExpect(jsonPath("$.userId").value(200))
                     .andExpect(jsonPath("$.status").value("SUCCESS"));
 
-            var list = repo.findByOrderId(100L);
+            var list = paymentRepository.findByOrderId(100L);
             assertThat(list).hasSize(1);
             Payment saved = list.get(0);
             assertThat(saved.getPaymentAmount()).isEqualByComparingTo(new BigDecimal("123.45"));
@@ -210,15 +206,16 @@ public class PaymentControllerIT extends BaseIT {
                             .willReturn(WireMock.aResponse().withStatus(200).withBody("31"))
             );
 
-            CreatePaymentDTO dto = createDto(101L, 201L, new BigDecimal("10"));
+            CreatePaymentDTO createPaymentDTO = createPaymentRequest(101L, 201L, new BigDecimal("10"));
 
             mockMvc.perform(post("/api/payments")
+                            .with(withUserId(createPaymentDTO.getUserId()))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(dto)))
+                            .content(objectMapper.writeValueAsString(createPaymentDTO)))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.status").value("FAILED"));
 
-            Payment saved = repo.findByOrderId(101L).get(0);
+            Payment saved = paymentRepository.findByOrderId(101L).get(0);
             assertThat(saved.getStatus()).isEqualTo(PaymentStatus.FAILED);
 
             Consumer<String, String> consumer = createTestConsumer();
@@ -247,13 +244,14 @@ public class PaymentControllerIT extends BaseIT {
 
         @Test
         void getPaymentByIdShouldReturn200AndPayment() throws Exception {
-            CreatePaymentDTO dto = createDto(200L, 300L, new BigDecimal("1"));
-            Payment p = paymentMapper.createPaymentDTOTOPayment(dto);
-            p.setStatus(PaymentStatus.SUCCESS);
-            p.setTimestamp(LocalDateTime.now());
-            Payment saved = repo.save(p);
+            CreatePaymentDTO createPaymentDTO = createPaymentRequest(200L, 300L, new BigDecimal("1"));
+            Payment payment = paymentMapper.createPaymentDTOTOPayment(createPaymentDTO);
+            payment.setStatus(PaymentStatus.SUCCESS);
+            payment.setTimestamp(LocalDateTime.now());
+            Payment saved = paymentRepository.save(payment);
 
-            mockMvc.perform(get("/api/payments/{id}", saved.getId()))
+            mockMvc.perform(get("/api/payments/{id}", saved.getId())
+                            .with(withUserId(createPaymentDTO.getUserId())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.orderId").value(200))
                     .andExpect(jsonPath("$.status").value("SUCCESS"));
@@ -261,12 +259,13 @@ public class PaymentControllerIT extends BaseIT {
 
         @Test
         void getPaymentsByOrderIdShouldReturnList() throws Exception {
-            CreatePaymentDTO dto1 = createDto(300L, 400L, new BigDecimal("5"));
-            CreatePaymentDTO dto2 = createDto(300L, 401L, new BigDecimal("7"));
-            repo.save(paymentMapper.createPaymentDTOTOPayment(dto1));
-            repo.save(paymentMapper.createPaymentDTOTOPayment(dto2));
+            CreatePaymentDTO firstPaymentDTO = createPaymentRequest(300L, 400L, new BigDecimal("5"));
+            CreatePaymentDTO secondPaymentDTO = createPaymentRequest(300L, 401L, new BigDecimal("7"));
+            paymentRepository.save(paymentMapper.createPaymentDTOTOPayment(firstPaymentDTO));
+            paymentRepository.save(paymentMapper.createPaymentDTOTOPayment(secondPaymentDTO));
 
-            mockMvc.perform(get("/api/payments/order/{orderId}", 300L))
+            mockMvc.perform(get("/api/payments/order/{orderId}", 300L)
+                            .with(withUserId(secondPaymentDTO.getUserId())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(2));
         }
@@ -277,6 +276,7 @@ public class PaymentControllerIT extends BaseIT {
             String end = "2025-01-01T00:00:00";
 
             mockMvc.perform(get("/api/payments/sum")
+                            .with(withUserId(1L))
                             .param("start", start)
                             .param("end", end))
                     .andExpect(status().isBadRequest())
@@ -289,21 +289,22 @@ public class PaymentControllerIT extends BaseIT {
 
         @Test
         void updatePaymentShouldReturn200AndUpdated() throws Exception {
-            CreatePaymentDTO dto = createDto(400L, 500L, new BigDecimal("15"));
-            Payment p = paymentMapper.createPaymentDTOTOPayment(dto);
-            p.setStatus(PaymentStatus.PENDING);
-            p.setTimestamp(LocalDateTime.now());
-            Payment saved = repo.save(p);
+            CreatePaymentDTO createPaymentDTO = createPaymentRequest(400L, 500L, new BigDecimal("15"));
+            Payment payment = paymentMapper.createPaymentDTOTOPayment(createPaymentDTO);
+            payment.setStatus(PaymentStatus.PENDING);
+            payment.setTimestamp(LocalDateTime.now());
+            Payment saved = paymentRepository.save(payment);
 
-            UpdatePaymentDTO upd = updateDto(PaymentStatus.CANCELLED, new BigDecimal("20"));
+            UpdatePaymentDTO updatePaymentDTO = createUpdateRequest(PaymentStatus.CANCELLED, new BigDecimal("20"));
 
             mockMvc.perform(put("/api/payments/{id}", saved.getId())
+                            .with(withUserId(createPaymentDTO.getUserId()))
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(upd)))
+                            .content(objectMapper.writeValueAsString(updatePaymentDTO)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("CANCELLED"));
 
-            Payment fromDb = repo.findById(saved.getId()).orElseThrow();
+            Payment fromDb = paymentRepository.findById(saved.getId()).orElseThrow();
             assertThat(fromDb.getPaymentAmount()).isEqualByComparingTo(new BigDecimal("20"));
         }
     }
