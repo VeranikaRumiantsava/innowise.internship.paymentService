@@ -25,7 +25,6 @@
 	</properties>
 
 	<dependencies>
-		<!-- Spring / Mongo / Web / Kafka и т.д. -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-mongodb</artifactId>
@@ -47,7 +46,6 @@
 			<artifactId>spring-kafka</artifactId>
 		</dependency>
 
-		<!-- Lombok (compile-time only) -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -55,14 +53,12 @@
 			<scope>provided</scope>
 		</dependency>
 
-		<!-- MapStruct API -->
 		<dependency>
 			<groupId>org.mapstruct</groupId>
 			<artifactId>mapstruct</artifactId>
 			<version>${mapstruct.version}</version>
 		</dependency>
 
-		<!-- Test / Testcontainers / extras -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -104,12 +100,16 @@
 			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/com.epages/wiremock-spring-boot-starter -->
 		<dependency>
 			<groupId>com.epages</groupId>
 			<artifactId>wiremock-spring-boot-starter</artifactId>
 			<version>1.0.0</version>
 			<type>pom</type>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 	</dependencies>
 
@@ -118,7 +118,7 @@
 			<dependency>
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>2023.0.6</version> <!-- подбирай под свой Spring Boot 3.5.5 -->
+				<version>2023.0.6</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -135,7 +135,6 @@
 
 	<build>
 		<plugins>
-			<!-- Maven Compiler: указываем release и аннотационные процессоры -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
@@ -143,35 +142,28 @@
 				<configuration>
 					<release>${java.version}</release>
 					<annotationProcessorPaths>
-						<!-- MapStruct processor -->
 						<path>
 							<groupId>org.mapstruct</groupId>
 							<artifactId>mapstruct-processor</artifactId>
 							<version>${mapstruct.version}</version>
 						</path>
-
-						<!-- Lombok (для аннотационной обработки) -->
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 							<version>${lombok.version}</version>
 						</path>
-
-						<!-- Lombok-MapStruct binding -->
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok-mapstruct-binding</artifactId>
 							<version>${lombok.mapstruct.binding.version}</version>
 						</path>
 					</annotationProcessorPaths>
-
 					<compilerArgs>
 						<arg>-Amapstruct.defaultComponentModel=spring</arg>
 					</compilerArgs>
 				</configuration>
 			</plugin>
 
-			<!-- Spring Boot plugin -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
